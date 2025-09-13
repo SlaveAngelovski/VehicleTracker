@@ -1,5 +1,29 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { analyseVideo } = require('./videoHandling');
+
 const app = express();
+const upload = multer({ dest: 'uploads/' });
+
+function cleanUploadsFolder(req) {
+ try {
+    const files = fs.readdirSync('uploads/');
+    files.forEach(file => {
+      const filePath = path.join('uploads', file);
+      // Only delete if it's not the current file
+      if (filePath !== req.file.path) {
+        fs.unlink(filePath, (err) => {
+          if (err) console.error('Error deleting old video:', err);
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Error cleaning uploads folder:', err);
+  }
+}
+
 app.use(express.static('public'));
 app.use(express.static('uploads'));
 app.get('/', (req, res) => {
@@ -10,6 +34,10 @@ app.post('/upload', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.json({ error: 'No video file uploaded' });
   }
+
+  // Clean up old videos before processing new one
+  cleanUploadsFolder(req);
+
   const videoPath = req.file.path;
   let analysisResult = null;
   
@@ -22,6 +50,8 @@ app.post('/upload', upload.single('video'), async (req, res) => {
   // Return both results and annotated video
   res.json({ 
     video: req.file.filename,
+    annotatedVideo: analysisResult.annotatedVideo, // New annotated video
+    results: analysisResult.results 
   });
 });
 
