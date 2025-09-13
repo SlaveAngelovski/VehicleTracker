@@ -41,12 +41,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Show uploaded video
-            // if (result.video) {
-            //     uploadedVideo.src = `/${result.video}`;
-            //     videoContainer.style.display = 'block';
-            // }
-
             // Show analysis results
             if (result.results) {
                 displayResults(result.results);
