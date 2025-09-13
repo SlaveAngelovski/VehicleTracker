@@ -68,3 +68,40 @@ function createAnnotatedVideoStream(inputPath) {
     outputVideo
   };
 }
+// Enhanced frame extraction with timestamps
+function getFrameStreamWithTimestamps(videoPath) {
+  const stream = new PassThrough();
+  const frameTimestamps = [];
+
+  ffmpeg(videoPath)
+    .inputOptions([
+        '-threads', '0',
+    ])
+    .outputOptions([
+        '-vf', `scale=1000:-1,showinfo`,
+        '-q:v', '2',
+        '-f', 'image2pipe',
+        '-c:v', 'mjpeg',
+        // '-pix_fmt', 'yuvj420p',
+        '-an',
+    ])
+    .on('stderr', (stderrLine) => {
+        const match = stderrLine.match(/pts_time:([0-9.]+)/);
+        if (match) {
+            frameTimestamps.push(parseFloat(match[1]));
+        }
+    })
+    .on('process', (commandLine) => {
+        console.log('Started ffmpeg with command:', commandLine);
+    })
+    .on('error', (err) => {
+        console.error('An ffmpeg error occurred: ' + err.message);
+        stream.emit('error', err);
+    })
+    .pipe(stream, { end: true });
+
+  const parsedStream = stream.pipe(new JpegFrameParser());
+  parsedStream.frameTimestamps = frameTimestamps;
+  
+  return parsedStream;
+}
