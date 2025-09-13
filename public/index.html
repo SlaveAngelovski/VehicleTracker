@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SpeedTrack Video Analysis</title>
+</head>
+<body>
+  <h1>Upload a Video for Analysis</h1>
+  
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" id="videoFile" name="video" accept="video/*" required>
+    <button type="submit">Upload</button>
+  </form>
+  
+  <div id="status"></div>
+  
+  <div id="videoContainer" style="display: none;">
+    <!-- <h2>Uploaded Video:</h2> -->
+    <!-- <video id="uploadedVideo" controls width="480"></video> -->
+  </div>
+  
+  <div id="resultsContainer" style="display: none;">
+    <h2>Analysis Results:</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Car count</th>
+          <th>Speed (km/h)</th>
+          <th>Date & Time</th>
+          <th>Screenshot</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
