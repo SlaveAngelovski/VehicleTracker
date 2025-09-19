@@ -1,8 +1,11 @@
-const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { analyseVideo } = require('./videoHandling');
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import analyseVideo from './videoHandling.js';
+
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const framesDir = path.join(__dirname, 'frames');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -19,6 +22,11 @@ function cleanUploadsFolder(req) {
         });
       }
     });
+
+    // clear frames directories
+    if (fs.existsSync(framesDir)) {
+      fs.rmSync(framesDir, { recursive: true, force: true });
+    }
   } catch (err) {
     console.error('Error cleaning uploads folder:', err);
   }
