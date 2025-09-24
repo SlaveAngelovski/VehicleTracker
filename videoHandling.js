@@ -8,7 +8,7 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { Tracker } from 'node-moving-things-tracker';
 import { isInsideSomeAreas } from 'node-moving-things-tracker/utils.js';
 import { drawAnnotatedFrame } from './draw.js';
-import { cleanupFrames, createAnnotatedFrameSaver, createVideoFromFrames, processAnalysisResults, saveFrame, timeStringToSeconds } from './videoUtils.js';
+import { cleanupFrames, createVideoFromFrames, processAnalysisResults, saveFrame, timeStringToSeconds } from './videoUtils.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);

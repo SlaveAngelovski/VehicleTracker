@@ -132,43 +132,6 @@ export function createVideoFromFramesFallback(outputDir, videoFileName = 'annota
   });
 }
 
-// Updated frame saver with fallback
-export function createAnnotatedFrameSaver(outputDir) {
-  const framesDir = path.join(outputDir, 'frames');
-  const outputPath = path.join(outputDir, 'annotated.mp4');
-  
-  // Create frames directory
-  if (!fs.existsSync(framesDir)) {
-    fs.mkdirSync(framesDir, { recursive: true });
-  }
-
-  let frameCount = 0;
-
-  return {
-    saveFrame: (frameBuffer) => {
-      const framePath = path.join(framesDir, `frame_${frameCount.toString().padStart(6, '0')}.jpg`);
-      fs.writeFileSync(framePath, frameBuffer);
-      frameCount++;
-    },
-    
-    createVideo: async () => {
-      if (frameCount === 0) return null;
-      
-      try {
-        return await createVideoFromFrames(outputDir, 'annotated.mp4');
-      } catch (err) {
-        console.log('Primary video creation failed, trying fallback...');
-        try {
-          return await createVideoFromFramesFallback(outputDir, 'annotated_fallback.mp4');
-        } catch (fallbackErr) {
-          console.error('Both video creation methods failed');
-          throw fallbackErr;
-        }
-      }
-    },
-  };
-}
-
 // Function to process analysis results
 export function processAnalysisResults(results) {
   const groupedBy = results.reduce((groups, item) => {
