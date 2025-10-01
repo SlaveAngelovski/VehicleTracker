@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <th>${result.id}</th>
                     <td>${result.speed}</td>
                     <td>${result.time} </td>
-                    <td>${result.screenshot}</td>
+                    <td><img src="${result.frame}" /></td>
                 </tr>`;
 
                 shadowDOM.appendChild(row);

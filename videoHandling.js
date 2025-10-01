@@ -101,7 +101,8 @@ export default async function analyseVideo(videoPath) {
           w: Math.round(p.bbox[2]),
           h: Math.round(p.bbox[3]),
           confidence: p.score * 100,
-          name: p.class
+          name: p.class,
+          bbox: p.bbox,
         }));
 
         const originalDetections = [...detectionScaledOfThisFrame];
@@ -145,7 +146,8 @@ export default async function analyseVideo(videoPath) {
             timestamp: new Date(Date.now() + (currentTimestamp * 1000)).toISOString(),
             frame: currentFrame,
             actualTime: currentTimestamp,
-            speed_kmh: validSpeed
+            speed_kmh: validSpeed,
+            bbox: originalDetections.map(d => d.bbox),
           });
 
           lastPos.set(id, { 
@@ -184,19 +186,20 @@ export default async function analyseVideo(videoPath) {
     });
 
     frameStream.on('end', async () => {
-      const filteredBySpeed = processAnalysisResults(results);
+      const filteredBySpeed = await processAnalysisResults(results, outputDir);
 
       console.log(`Analysis complete. Processing ${currentFrame} annotated frames...`);
       console.log(`Found ${filteredBySpeed.length} unique vehicles with speeds.`);
       
       try {
         const videoPath = await createVideoFromFrames(outputDir);
+        const resolvedFiltered = await Promise.all(filteredBySpeed);
         
         resolve({
           success: true,
-          vehicleCount: filteredBySpeed.length,
+          vehicleCount: resolvedFiltered.length,
           frameCount: currentFrame,
-          results: filteredBySpeed,
+          results: resolvedFiltered,
           annotatedVideo: videoPath ? path.basename(videoPath) : null,
           outputPath: outputDir
         });
@@ -206,9 +209,9 @@ export default async function analyseVideo(videoPath) {
         
         resolve({
           success: false,
-          vehicleCount: filteredBySpeed.length,
+          vehicleCount: resolvedFiltered.length,
           frameCount: currentFrame,
-          results: filteredBySpeed,
+          results: resolvedFiltered,
           annotatedVideo: null,
           error: videoErr.message
         });

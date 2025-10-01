@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
+import { createCanvas, loadImage } from 'canvas';
 
 export function timeStringToSeconds(timeString) {
   if (typeof timeString === 'number') return timeString;
@@ -134,26 +135,80 @@ export function createVideoFromFramesFallback(outputDir, videoFileName = 'annota
 }
 
 // Function to process analysis results
-export function processAnalysisResults(results) {
+export async function processAnalysisResults(results, outputDir) {
   const groupedBy = results.reduce((groups, item) => {
     const groupKey = item['id'];
+
     if (!groups[groupKey]) {
       groups[groupKey] = [];
     }
+
     groups[groupKey].push(item);
+
     return groups;
   }, []);
 
-  return Object.keys(groupedBy).map((id) => {
+  return Object.keys(groupedBy).map(async (id) => {
     const group = groupedBy[id];
-    const maxSpeedEntry = group.reduce((max, entry) => 
-      entry.speed_kmh > max.speed_kmh ? entry : max
+
+    let maxSpeedFrameNumber = 0; 
+    const maxSpeedEntry = group.reduce((max, entry) => {
+      // set the max speed frame number
+      if (entry.speed_kmh > max.speed_kmh) {
+        maxSpeedFrameNumber = entry.frame;
+      }
+
+      const maxSpeed = entry.speed_kmh > max.speed_kmh ? entry : max;
+      maxSpeed.bbox = entry.bbox; // keep the bbox of the max speed entry
+
+      return maxSpeed;
+    });
+
+    // Read the frame file as a buffer first
+    const fileName = `frame_${maxSpeedFrameNumber.toString().padStart(6, '0')}.jpg`;
+    const framePath = path.join(outputDir, 'frames', fileName);
+    const frameBuffer = await fs.promises.readFile(framePath);
+
+    const maxSpeedCroppedFrame = await cropVehicleFromFrame(
+      frameBuffer, // Now passing the actual buffer
+      maxSpeedEntry.bbox
     );
+    // const croppedFramePath = path.join(outputDir, 'annotated', 'frames', croppedFrameName);
+    // fs.writeFileSync(croppedFramePath, maxSpeedCroppedFrame);
+
+    if (maxSpeedCroppedFrame) {
+      await saveFrame(maxSpeedCroppedFrame, maxSpeedEntry.frame, path.join(outputDir, 'cropped'));
+    }
 
     return {
       id: parseInt(id),
       speed: maxSpeedEntry.speed_kmh,
-      time: maxSpeedEntry.timestamp
+      time: maxSpeedEntry.timestamp,
+      frame: maxSpeedCroppedFrame ? `\\annotated\\cropped\\frames\\${fileName}` : null,
     };
+  });
+}
+
+export async function cropVehicleFromFrame(frameBuffer, bbox) {
+  return new Promise(async (resolve, reject) => {
+    if (bbox?.length < 1) {
+      return resolve(null);
+    }
+
+    try {
+      const img = await loadImage(frameBuffer);
+      const canvas = createCanvas(bbox[0][2], bbox[0][3]);
+      const ctx = canvas.getContext('2d');
+
+      bbox.forEach((croppedEl) => {
+        ctx.drawImage(img, croppedEl[0], croppedEl[1], croppedEl[2], croppedEl[3], 0, 0);
+      });
+
+      const croppedBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
+
+      resolve(croppedBuffer);
+    } catch (error) {
+      reject(error);
+    }
   });
 }
