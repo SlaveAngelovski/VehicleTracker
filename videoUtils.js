@@ -18,7 +18,7 @@ export function timeStringToSeconds(timeString) {
   return parseFloat(timeString) || 0;
 }
 
-export function saveFrame(frameBuffer, frameCount, outputDir) {
+export async function saveFrame(frameBuffer, frameCount, outputDir) {
   const framesDir = path.join(outputDir, 'frames');
   
   // Create frames directory if it doesn't exist
@@ -27,7 +27,8 @@ export function saveFrame(frameBuffer, frameCount, outputDir) {
   }
   
   const name = path.join(framesDir, `frame_${frameCount.toString().padStart(6, '0')}.jpg`);
-  fs.writeFileSync(name, frameBuffer);
+  //fs.writeFileSync(name, frameBuffer);
+  await fs.promises.writeFile(name, frameBuffer);
 }
 
 export function cleanupFrames(outputDir) {

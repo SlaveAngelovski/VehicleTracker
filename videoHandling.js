@@ -135,7 +135,7 @@ export default async function analyseVideo(videoPath) {
             const distPx = Math.hypot(cx - px, cy - py);
             const meters = distPx / pixelsPerMeter;
             const mps = meters / dt;
-            speedKmh = mps * 3.6;
+            speedKmh = mps * 3.6; // convert to km/h
           }
 
           const validSpeed = Number.isFinite(speedKmh) ? Math.round(speedKmh) : 0;
@@ -155,7 +155,10 @@ export default async function analyseVideo(videoPath) {
             frame: currentFrame
           });
 
-          return { ...obj, speed: validSpeed };
+          obj.speed = validSpeed;
+
+          // return { ...obj, speed: validSpeed };
+          return obj;
         });
 
         // Create and save annotated frame
@@ -168,7 +171,7 @@ export default async function analyseVideo(videoPath) {
           currentTimestamp
         );
 
-        saveFrame(annotatedBuffer, currentFrame, outputDir);
+        await saveFrame(annotatedBuffer, currentFrame, outputDir);
         currentFrame++;
         
         if (currentFrame % 30 === 0) {

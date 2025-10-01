@@ -61,15 +61,19 @@ export function drawExcludedAreas(ctx, ignoredAreas) {
   ctx.lineWidth = 2;
   
   ignoredAreas.forEach((area, index) => {
+    // Convert from center-based to top-left coordinates for drawing
+    const drawX = area.x - area.w / 2;
+    const drawY = area.y - area.h / 2;
+    
     // Fill the excluded area
-    ctx.fillRect(area.x, area.y, area.w, area.h);
+    ctx.fillRect(drawX, drawY, area.w, area.h);
     // Draw border
-    ctx.strokeRect(area.x, area.y, area.w, area.h);
+    ctx.strokeRect(drawX, drawY, area.w, area.h);
     
     // Add label
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.font = '14px Arial';
-    ctx.fillText(`IGNORED ${index + 1}`, area.x + 5, area.y + 20);
+    ctx.fillText(`IGNORED ${index + 1}`, drawX + 5, drawY + 20);
     ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'; // Reset fill style
   });
 }

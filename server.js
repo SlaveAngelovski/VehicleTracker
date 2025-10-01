@@ -22,11 +22,6 @@ function cleanUploadsFolder(req) {
         });
       }
     });
-
-    // clear frames directories
-    if (fs.existsSync(framesDir)) {
-      fs.rmSync(framesDir, { recursive: true, force: true });
-    }
   } catch (err) {
     console.error('Error cleaning uploads folder:', err);
   }
@@ -61,6 +56,11 @@ app.post('/upload', upload.single('video'), async (req, res) => {
     annotatedVideo: analysisResult.annotatedVideo, // New annotated video
     results: analysisResult.results 
   });
+
+  // // clear frames directories
+  // if (fs.existsSync(framesDir)) {
+  //   fs.rmSync(framesDir, { recursive: true, force: true });
+  // }
 });
 
 app.listen(3000, () => console.log('Web server running on http://localhost:3000'));
