@@ -59,15 +59,17 @@ export function createVideoFromFrames(outputDir, videoFileName = 'annotated.mp4'
     console.log(`Found ${frames.length} frames in ${framesDir}`);
     console.log('First few frames:', frames.slice(0, 5));
 
-    // Fix: Add video filter to ensure dimensions are even
     ffmpeg()
       .input(path.join(framesDir, 'frame_%06d.jpg'))
       .inputOptions([
-        '-start_number', '0'
+        '-start_number', '0',
+        '-threads', '24'
       ])
+      .withNoAudio()
+      .size('1000x?')
       .outputOptions([
         '-c:v', 'libx264',
-        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',  // Pad to make dimensions even
+        // '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',  // Pad to make dimensions even
         '-pix_fmt', 'yuv420p',
         '-crf', '23',
         '-preset', 'medium'
@@ -87,7 +89,7 @@ export function createVideoFromFrames(outputDir, videoFileName = 'annotated.mp4'
         console.log('Annotated video created:', outputVideoPath);
         // Clean up frame files
         try {
-          fs.rmSync(framesDir, { recursive: true, force: true });
+          //fs.rmSync(framesDir, { recursive: true, force: true });
         } catch (cleanupErr) {
           console.warn('Warning: Could not clean up frames directory:', cleanupErr.message);
         }
@@ -113,9 +115,15 @@ export function createVideoFromFramesFallback(outputDir, videoFileName = 'annota
     
     ffmpeg()
       .input(path.join(framesDir, 'frame_%06d.jpg'))
+      .inputOptions([
+        '-threads', '24'
+      ])
+      .withNoAudio()
+      .autopad()
+      .size('1000x?')
+      .withNoAudio()
       .outputOptions([
         '-vcodec', 'mpeg4',
-        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',  // Add padding here too
         '-q:v', '5'
       ])
       .on('start', (commandLine) => {

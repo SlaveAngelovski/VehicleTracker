@@ -28,13 +28,15 @@ function getFrameStreamWithTimestamps(videoPath) {
   const frameTimestamps = [];
 
   ffmpeg(videoPath)
-    .inputOptions(['-threads', '0'])
+    .inputOptions(['-threads', '24'])
+    .withNoAudio()
+    .autopad()
+    .size('1000x?')
+    .format('mjpeg')
     .outputOptions([
-      '-vf', 'scale=1000:-1,showinfo',
+      '-vf', 'showinfo',
       '-q:v', '2',
       '-f', 'image2pipe',
-      '-c:v', 'mjpeg',
-      '-an'
     ])
     // .on('stderr', (stderrLine) => {
     //   const match = stderrLine.match(/pts_time:([0-9.]+)/);
