@@ -21,17 +21,13 @@ export function timeStringToSeconds(timeString) {
   // return parseFloat(timeString) || 0;
 }
 
-export async function saveFrame(frameBuffer, frameCount, outputDir) {
-  const framesDir = path.join(outputDir, 'frames');
-  
-  // Create frames directory if it doesn't exist
-  if (!fs.existsSync(framesDir)) {
-    fs.mkdirSync(framesDir, { recursive: true });
+export async function saveFrame(frameBuffer, frameName, outputDir, name) {
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
   }
   
-  const name = path.join(framesDir, `frame_${frameCount.toString().padStart(6, '0')}.jpg`);
-  //fs.writeFileSync(name, frameBuffer);
-  await fs.promises.writeFile(name, frameBuffer);
+  const pathToSave = name ?? path.join(outputDir, frameName);
+  await fs.promises.writeFile(pathToSave, frameBuffer);
 }
 
 export function cleanupFrames(outputDir) {
@@ -41,28 +37,27 @@ export function cleanupFrames(outputDir) {
   }
 }
 
-export function createVideoFromFrames(outputDir, videoFileName = 'annotated.mp4') {
-  const framesDir = path.join(outputDir, 'frames');
-  const outputVideoPath = path.join(outputDir, videoFileName);
+export function createVideoFromFrames(framesPath, framesName, videoPath, videoFileName) {
+  const outputVideoPath = path.join(videoPath, videoFileName);
 
   return new Promise((resolve, reject) => {
     // Check if frames directory exists and has frames
-    if (!fs.existsSync(framesDir)) {
+    if (!fs.existsSync(framesPath)) {
       reject(new Error('Frames directory does not exist'));
       return;
     }
 
-    const frames = fs.readdirSync(framesDir).filter(file => file.endsWith('.jpg'));
+    const frames = fs.readdirSync(framesPath).filter(file => file.endsWith('.jpg'));
     if (frames.length === 0) {
       reject(new Error('No frames found to create video'));
       return;
     }
 
-    console.log(`Found ${frames.length} frames in ${framesDir}`);
+    console.log(`Found ${frames.length} frames in ${framesPath}`);
     console.log('First few frames:', frames.slice(0, 5));
 
     ffmpeg()
-      .input(path.join(framesDir, 'frame_%06d.jpg'))
+      .input(path.join(framesPath, framesName))
       .inputOptions([
         '-start_number', '0',
         '-threads', '24'
@@ -107,43 +102,6 @@ export function createVideoFromFrames(outputDir, videoFileName = 'annotated.mp4'
   });
 }
 
-// Also update the fallback function
-export function createVideoFromFramesFallback(outputDir, videoFileName = 'annotated_fallback.mp4') {
-  const framesDir = path.join(outputDir, 'frames');
-  const outputVideoPath = path.join(outputDir, videoFileName);
-
-  return new Promise((resolve, reject) => {
-    console.log('Trying fallback video creation method...');
-    
-    ffmpeg()
-      .input(path.join(framesDir, 'frame_%06d.jpg'))
-      .inputOptions([
-        '-threads', '24'
-      ])
-      .withNoAudio()
-      .autopad()
-      .size('1000x?')
-      .withNoAudio()
-      .outputOptions([
-        '-vcodec', 'mpeg4',
-        '-q:v', '5'
-      ])
-      .on('start', (commandLine) => {
-        console.log('Fallback FFmpeg command:', commandLine);
-      })
-      .on('end', () => {
-        console.log('Fallback video created:', outputVideoPath);
-        fs.rmSync(framesDir, { recursive: true, force: true });
-        resolve(path.basename(outputVideoPath));
-      })
-      .on('error', (err) => {
-        console.error('Fallback also failed:', err.message);
-        reject(err);
-      })
-      .save(outputVideoPath);
-  });
-}
-
 // Function to process analysis results
 export async function processAnalysisResults(results, outputDir) {
   const groupedBy = results.reduce((groups, item) => {
@@ -176,25 +134,26 @@ export async function processAnalysisResults(results, outputDir) {
 
     // Read the frame file as a buffer first
     const fileName = `frame_${maxSpeedFrameNumber.toString().padStart(6, '0')}.jpg`;
-    const framePath = path.join(outputDir, 'frames', fileName);
-    const frameBuffer = await fs.promises.readFile(framePath);
+    // const framePath = path.join(outputDir, 'frames', fileName);
+    // const frameBuffer = await fs.promises.readFile(framePath);
 
-    const maxSpeedCroppedFrame = await cropVehicleFromFrame(
-      frameBuffer, // Now passing the actual buffer
-      maxSpeedEntry.bbox
-    );
-    // const croppedFramePath = path.join(outputDir, 'annotated', 'frames', croppedFrameName);
-    // fs.writeFileSync(croppedFramePath, maxSpeedCroppedFrame);
+    // const maxSpeedCroppedFrame = await cropVehicleFromFrame(
+    //   frameBuffer, // Now passing the actual buffer
+    //   maxSpeedEntry.bbox
+    // );
+    // // const croppedFramePath = path.join(outputDir, 'annotated', 'frames', croppedFrameName);
+    // // fs.writeFileSync(croppedFramePath, maxSpeedCroppedFrame);
 
-    if (maxSpeedCroppedFrame) {
-      await saveFrame(maxSpeedCroppedFrame, maxSpeedEntry.frame, path.join(outputDir, 'cropped'));
-    }
+    // if (maxSpeedCroppedFrame) {
+    //   await saveFrame(maxSpeedCroppedFrame, maxSpeedEntry.frame, path.join(outputDir, 'cropped'));
+    // }
 
     return {
       id: parseInt(id),
       speed: maxSpeedEntry.speed_kmh,
       time: maxSpeedEntry.timestamp,
-      frame: maxSpeedCroppedFrame ? `\\annotated\\cropped\\frames\\${fileName}` : null,
+      // frame: maxSpeedCroppedFrame ? `\\annotated\\cropped\\frames\\${fileName}` : null,
+      frame: `\\annotated\\cropped\\frames\\${fileName}`,
     };
   });
 }

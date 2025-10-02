@@ -84,6 +84,11 @@ export default async function analyseVideo(videoPath) {
 
   // Create annotated frame saver
   const frameStream = getFrameStreamWithTimestamps(videoPath);
+  const annotatedPath = path.join(outputDir, 'frames');
+  const frameName = `${currentFrame}_${Date.now()}`;
+  const croppedPath = path.join(__dirname, 'public', 'cropped');
+  const videoPath = path.join(outputDir, 'frames');
+  const videoPath = await createVideoFromFrames(annotatedPath, 'frame_%06d.jpg', outputDir, `annotated_${Date.now()}.mp4`);
 
   return new Promise((resolve, reject) => {
     frameStream.on('data', async chunk => {
@@ -175,7 +180,7 @@ export default async function analyseVideo(videoPath) {
           currentTimestamp
         );
 
-        await saveFrame(annotatedBuffer, currentFrame, outputDir);
+        await saveFrame(annotatedBuffer, `annotated_${currentFrame}.jpg`, annotatedPath);
         currentFrame++;
         
         if (currentFrame % 30 === 0) {
