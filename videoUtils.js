@@ -5,6 +5,9 @@ import { createCanvas, loadImage } from 'canvas';
 
 export function timeStringToSeconds(timeString) {
   if (typeof timeString === 'number') return timeString;
+
+  return new Date(`1970-01-01T${timeString}Z`).getTime() / 1000;
+  //if (typeof timeString === 'number') return timeString;
   
   // Handle format like "00:00:00.33" or "00:00:05.67"
   const parts = timeString.split(':');
@@ -14,9 +17,19 @@ export function timeStringToSeconds(timeString) {
     const seconds = parseFloat(parts[2]);
     return hours * 3600 + minutes * 60 + seconds;
   }
+  // // Handle format like "00:00:00.33" or "00:00:05.67"
+  // const parts = timeString.split(':');
+  // if (parts.length === 3) {
+  //   const hours = parseFloat(parts[0]);
+  //   const minutes = parseFloat(parts[1]);
+  //   const seconds = parseFloat(parts[2]);
+  //   return hours * 3600 + minutes * 60 + seconds;
+  // }
   
   // Fallback - try to parse as float
   return parseFloat(timeString) || 0;
+  // // Fallback - try to parse as float
+  // return parseFloat(timeString) || 0;
 }
 
 export async function saveFrame(frameBuffer, frameCount, outputDir) {
