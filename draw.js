@@ -177,49 +177,6 @@ export function drawFrameInfo(ctx, frameNumber, timestamp, detectionsCount, trac
 }
 
 /**
- * Save annotated frame to file
- * @param {Buffer} frameBuffer - Original frame buffer
- * @param {Array} detections - Detection objects
- * @param {Array} tracked - Tracked objects
- * @param {Array} ignoredAreas - Ignored areas
- * @param {number} frameNumber - Frame number
- * @param {number} timestamp - Timestamp
- * @param {string} outputDir - Output directory path
- * @returns {Promise<Object|null>} - Screenshot info object or null
- */
-export async function saveAnnotatedFrame(frameBuffer, detections, tracked, ignoredAreas, frameNumber, timestamp, outputDir) {
-  try {
-    // Create unique filename
-    const filename = `frame_${frameNumber}_${Date.now()}.jpg`;
-    const filepath = path.join(outputDir, filename);
-    
-    // Draw annotations on frame
-    const annotatedBuffer = await drawAnnotatedFrame(
-      frameBuffer, 
-      detections, 
-      tracked, 
-      ignoredAreas, 
-      frameNumber, 
-      timestamp
-    );
-    
-    // Save to file
-    fs.writeFileSync(filepath, annotatedBuffer);
-    
-    return {
-      filename,
-      detections: detections.length,
-      tracked: tracked.length,
-      timestamp
-    };
-    
-  } catch (error) {
-    console.error('Error saving annotated frame:', error);
-    return null;
-  }
-}
-
-/**
  * Draw speed information on tracked objects
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {Array} tracked - Tracked objects with speed data
