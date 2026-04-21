@@ -8,7 +8,7 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { Tracker } from 'node-moving-things-tracker';
 import { isInsideSomeAreas } from 'node-moving-things-tracker/utils.js';
 import { drawAnnotatedFrame } from './draw.js';
-import { cleanupFrames, createVideoFromFrames, processAnalysisResults, saveFrame, timeStringToSeconds } from './videoUtils.js';
+import { cleanupFrames, createVideoFromFrames, cropVehicleFromFrame, processAnalysisResults, saveFrame, timeStringToSeconds } from './videoUtils.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,7 +30,6 @@ function getFrameStreamWithTimestamps(videoPath) {
   ffmpeg(videoPath)
     .inputOptions(['-threads', '24'])
     .withNoAudio()
-    .autopad()
     .size('1000x?')
     .format('mjpeg')
     .outputOptions([
@@ -50,13 +49,13 @@ function getFrameStreamWithTimestamps(videoPath) {
 
       frameTimestamps.push(timeInSeconds);
     })
-    .on('process', (commandLine) => {
-      console.log('Started ffmpeg with command:', commandLine);
-    })
-    .on('error', (err) => {
-      console.error('An ffmpeg error occurred: ' + err.message);
-      stream.emit('error', err);
-    })
+    // .on('process', (commandLine) => {
+    //   console.log('Started ffmpeg with command:', commandLine);
+    // })
+    // .on('error', (err) => {
+    //   console.error('An ffmpeg error occurred: ' + err.message);
+    //   stream.emit('error', err);
+    // })
     .pipe(stream, { end: true });
 
   const parsedStream = stream.pipe(new JpegFrameParser());
@@ -65,10 +64,58 @@ function getFrameStreamWithTimestamps(videoPath) {
   return parsedStream;
 }
 
+async function trackAndEstimateSpeeds(videoPath) {
+
+}
+
+async function estimateSpeed(currentTrack, originalDetections, currentFrameNumber, currentTimestamp, lastPos, results) {
+  const cx = currentTrack.x + currentTrack.w/2;
+  const cy = currentTrack.y + currentTrack.h/2;
+  const id = currentTrack.id;
+  let speedKmh = 0;
+
+  if (lastPos.has(id)) {
+    const { px, py, timestamp: lastTimestamp } = lastPos.get(id);
+    const dt = currentTimestamp - lastTimestamp;
+    
+    const distPx = Math.hypot(cx - px, cy - py);
+    const meters = distPx / pixelsPerMeter;
+    const mps = meters / dt;
+    speedKmh = mps * 3.6; // convert to km/h
+  }
+
+  const validSpeed = Number.isFinite(speedKmh) ? Math.round(speedKmh) : 0;
+
+  return {
+    speed: validSpeed,
+    id: id,
+    results: {
+      timestamp: new Date(Date.now() + (currentTimestamp * 1000)).toISOString(),
+      frame: currentFrameNumber,
+      actualTime: currentTimestamp,
+      speed_kmh: validSpeed,
+      bbox: originalDetections.map(d => d.bbox),
+    },
+    lastPos: {
+      px: cx, 
+      py: cy, 
+      timestamp: currentTimestamp,
+      frame: currentFrameNumber
+    }
+  }
+}
+        
+
 // Main analysis function
 export default async function analyseVideo(videoPath) {
+  let currentFrameNumber = 0;
   const model = await cocoSsd.load({ base: 'mobilenet_v2' });
-  Tracker.reset();
+  const lastPos = new Map();
+  const results = [];
+  const annotatedPath = path.join(outputDir, 'frames');
+  const croppedPath = path.join(__dirname, 'public', 'cropped');
+
+  // Tracker.reset();
 
   Tracker.setParams({
     unMatchedFramesTolerance: 10,
@@ -76,33 +123,28 @@ export default async function analyseVideo(videoPath) {
     fastDelete: false,
     distanceLimit: 10000,
     matchingAlgorithm: 'munkres',
+    enableKeepInMemory: true,
   });
-
-  const lastPos = new Map();
-  const results = [];
-  let currentFrame = 0;
 
   // Create annotated frame saver
   const frameStream = getFrameStreamWithTimestamps(videoPath);
-  const annotatedPath = path.join(outputDir, 'frames');
-  const frameName = `${currentFrame}_${Date.now()}`;
-  const croppedPath = path.join(__dirname, 'public', 'cropped');
-  const videoPath = path.join(outputDir, 'frames');
-  const videoPath = await createVideoFromFrames(annotatedPath, 'frame_%06d.jpg', outputDir, `annotated_${Date.now()}.mp4`);
 
   return new Promise((resolve, reject) => {
-    frameStream.on('data', async chunk => {
+    frameStream.on('data', async (chunk) => {
       try {
         // const img = tf.node.decodeImage(chunk, 3);
         const img = tf.node.decodeJpeg(chunk);
         const preds = await model.detect(img, 20, 0.3);
+        const timeStamp = frameStream?.frameTimestamps[currentFrameNumber] ?? 0;
+        const annotatedFramesName = `annotated_${currentFrameNumber}`;
+
         img.dispose();
 
         const vehicles = preds.filter(p =>
           ['car','truck','bus','motorcycle','bike'].includes(p.class)
         );
 
-        let detectionScaledOfThisFrame = vehicles.map((p) => ({
+        let detectionScaledOfThisFrame = vehicles?.map((p) => ({
           x: Math.round(p.bbox[0]),
           y: Math.round(p.bbox[1]),
           w: Math.round(p.bbox[2]),
@@ -110,81 +152,66 @@ export default async function analyseVideo(videoPath) {
           confidence: p.score * 100,
           name: p.class,
           bbox: p.bbox,
+          frameNumber: currentFrameNumber,
+          timestamp: timeStamp,
         }));
 
-        const originalDetections = [...detectionScaledOfThisFrame];
-
-        // Filter out detections in ignored areas
-        if (ignoredAreas?.length > 0) {
-          detectionScaledOfThisFrame = detectionScaledOfThisFrame.filter(detection => 
-            !isInsideSomeAreas(ignoredAreas, detection)
-          );
+        if (detectionScaledOfThisFrame.length > 0) {
+          if (ignoredAreas?.length > 0) {
+            detectionScaledOfThisFrame = detectionScaledOfThisFrame.filter(detection => 
+              !isInsideSomeAreas(ignoredAreas, detection)
+            );
+          }
         }
 
-        Tracker.updateTrackedItemsWithNewFrame([...detectionScaledOfThisFrame], currentFrame);
         const tracked = Tracker.getJSONOfTrackedItems();
 
-        // Get timestamp and ensure it's a number
-        const rawTimestamp = frameStream.frameTimestamps[currentFrame];
-        const currentTimestamp = typeof rawTimestamp === 'number' ? rawTimestamp : (currentFrame / 30); // fallback to 30fps estimate
-        // const currentTimestamp = frameStream.frameTimestamps[currentFrame];
+        const trackedWithSpeeds = tracked.map(async (currentTrack) => {
+          const trackedAndCounted = await estimateSpeed(
+            currentTrack,
+            detectionScaledOfThisFrame,
+            currentFrameNumber,
+            timeStamp,
+            lastPos,
+            results
+          );
 
-        // Calculate speeds for tracked objects
-        const trackedWithSpeeds = tracked.map(obj => {
-          const cx = obj.x + obj.w/2;
-          const cy = obj.y + obj.h/2;
-          const id = obj.id;
-          let speedKmh = 0;
-
-          if (lastPos.has(id)) {
-            const { px, py, timestamp: lastTimestamp } = lastPos.get(id);
-            const dt = currentTimestamp - lastTimestamp;
-            
-            const distPx = Math.hypot(cx - px, cy - py);
-            const meters = distPx / pixelsPerMeter;
-            const mps = meters / dt;
-            speedKmh = mps * 3.6; // convert to km/h
-          }
-
-          const validSpeed = Number.isFinite(speedKmh) ? Math.round(speedKmh) : 0;
-
-          results.push({
-            id,
-            timestamp: new Date(Date.now() + (currentTimestamp * 1000)).toISOString(),
-            frame: currentFrame,
-            actualTime: currentTimestamp,
-            speed_kmh: validSpeed,
-            bbox: originalDetections.map(d => d.bbox),
-          });
-
-          lastPos.set(id, { 
-            px: cx, 
-            py: cy, 
-            timestamp: currentTimestamp,
-            frame: currentFrame
-          });
-
-          obj.speed = validSpeed;
-
-          // return { ...obj, speed: validSpeed };
-          return obj;
+          currentTrack.speed = trackedAndCounted.speed;
+          lastPos.set(trackedAndCounted.id, trackedAndCounted.lastPos);
+          results.push({...trackedAndCounted.results, id: trackedAndCounted.id});
         });
+  
+        Tracker.updateTrackedItemsWithNewFrame(detectionScaledOfThisFrame, currentFrameNumber);
 
-        // Create and save annotated frame
         const annotatedBuffer = await drawAnnotatedFrame(
           chunk,
-          originalDetections,
+          detectionScaledOfThisFrame,
           trackedWithSpeeds,
           ignoredAreas || [],
-          currentFrame,
-          currentTimestamp
+          currentFrameNumber,
+          timeStamp,
         );
 
-        await saveFrame(annotatedBuffer, `annotated_${currentFrame}.jpg`, annotatedPath);
-        currentFrame++;
+        await saveFrame(
+          annotatedBuffer,
+          `${annotatedFramesName}.jpg`,
+          annotatedPath
+        );
+
+        // if (detectionScaledOfThisFrame.length > 0) {
+        //     detectionScaledOfThisFrame.forEach(async (detection, index) => {
+        //       const bbox = detection.bbox;
+        //       const croppedDetection = await cropVehicleFromFrame(chunk, bbox);
+        //       const croppedFrameName = `cropped_${currentFrameNumber}_${index}`;
+
+        //       await saveFrame(croppedDetection, `${croppedFrameName}.jpg`, croppedPath);
+        //   });
+        // }
+
+        currentFrameNumber++;
         
-        if (currentFrame % 30 === 0) {
-          console.log(`Processed ${currentFrame} frames...`);
+        if (currentFrameNumber % 1 === 0) {
+          console.log(`Processed ${currentFrameNumber} frame...`);
         }
 
       } catch (err) {
@@ -193,21 +220,20 @@ export default async function analyseVideo(videoPath) {
     });
 
     frameStream.on('end', async () => {
-      const filteredBySpeed = await processAnalysisResults(results, outputDir);
+      const filteredBySpeed = await processAnalysisResults(results, croppedPath)
+      const video = await createVideoFromFrames(annotatedPath, 'annotated_%03d.jpg', `annotated_${Date.now()}.mp4`, outputDir);
 
-      console.log(`Analysis complete. Processing ${currentFrame} annotated frames...`);
-      console.log(`Found ${filteredBySpeed.length} unique vehicles with speeds.`);
+      cleanupFrames(path.join(outputDir, 'frames'));
       
       try {
-        const videoPath = await createVideoFromFrames(outputDir);
         const resolvedFiltered = await Promise.all(filteredBySpeed);
         
         resolve({
           success: true,
           vehicleCount: resolvedFiltered.length,
-          frameCount: currentFrame,
+          frameCount: currentFrameNumber,
           results: resolvedFiltered,
-          annotatedVideo: videoPath ? path.basename(videoPath) : null,
+          annotatedVideo: video ?? null,
           outputPath: outputDir
         });
       } catch (videoErr) {
@@ -217,7 +243,7 @@ export default async function analyseVideo(videoPath) {
         resolve({
           success: false,
           vehicleCount: resolvedFiltered.length,
-          frameCount: currentFrame,
+          frameCount: currentFrameNumber,
           results: resolvedFiltered,
           annotatedVideo: null,
           error: videoErr.message
