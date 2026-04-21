@@ -2,6 +2,7 @@
   "pixelsPerMeter": 18,
   "spreadsheetId": "YOUR_GOOGLE_SHEET_ID",
   "ignoredAreas": [
-   
+    {"x": 500, "y": 90, "w": 1000, "h": 360},
+    {"x": 500, "y": 120, "w": 1000, "h": 460}
   ]
 }
