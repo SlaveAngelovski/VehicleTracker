@@ -21,23 +21,22 @@ export function timeStringToSeconds(timeString) {
   // return parseFloat(timeString) || 0;
 }
 
-export async function saveFrame(frameBuffer, frameName, outputDir, name) {
+export async function saveFrame(frameBuffer, frameName, outputDir) {
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
   
-  const pathToSave = name ?? path.join(outputDir, frameName);
+  const pathToSave = path.join(outputDir, frameName);
   await fs.promises.writeFile(pathToSave, frameBuffer);
 }
 
-export function cleanupFrames(outputDir) {
-  const framesDir = path.join(outputDir, 'frames');
+export function cleanupFrames(framesDir) {
   if (fs.existsSync(framesDir)) {
     fs.rmSync(framesDir, { recursive: true, force: true });
   }
 }
 
-export function createVideoFromFrames(framesPath, framesName, videoPath, videoFileName) {
+export function createVideoFromFrames(framesPath, framesName, videoFileName, videoPath) {
   const outputVideoPath = path.join(videoPath, videoFileName);
 
   return new Promise((resolve, reject) => {
@@ -53,9 +52,6 @@ export function createVideoFromFrames(framesPath, framesName, videoPath, videoFi
       return;
     }
 
-    console.log(`Found ${frames.length} frames in ${framesPath}`);
-    console.log('First few frames:', frames.slice(0, 5));
-
     ffmpeg()
       .input(path.join(framesPath, framesName))
       .inputOptions([
@@ -64,12 +60,11 @@ export function createVideoFromFrames(framesPath, framesName, videoPath, videoFi
       ])
       .withNoAudio()
       .size('1000x?')
+      .videoCodec('libx264')
+      .withOutputFPS(25)
       .outputOptions([
-        '-c:v', 'libx264',
-        // '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',  // Pad to make dimensions even
         '-pix_fmt', 'yuv420p',
         '-crf', '23',
-        '-preset', 'medium'
       ])
       .on('start', (commandLine) => {
         console.log('FFmpeg command:', commandLine);
@@ -83,8 +78,8 @@ export function createVideoFromFrames(framesPath, framesName, videoPath, videoFi
         }
       })
       .on('end', () => {
-        console.log('Annotated video created:', outputVideoPath);
-        // Clean up frame files
+        // console.log('Annotated video created:', outputVideoPath);
+        // // Clean up frame files
         try {
           //fs.rmSync(framesDir, { recursive: true, force: true });
         } catch (cleanupErr) {
@@ -93,9 +88,6 @@ export function createVideoFromFrames(framesPath, framesName, videoPath, videoFi
         resolve(path.basename(outputVideoPath));
       })
       .on('error', (err, stdout, stderr) => {
-        console.error('FFmpeg error:', err.message);
-        console.error('FFmpeg stdout:', stdout);
-        console.error('FFmpeg stderr:', stderr);
         reject(err);
       })
       .save(outputVideoPath);
@@ -103,7 +95,7 @@ export function createVideoFromFrames(framesPath, framesName, videoPath, videoFi
 }
 
 // Function to process analysis results
-export async function processAnalysisResults(results, outputDir) {
+export async function processAnalysisResults(results, fileName) {
   const groupedBy = results.reduce((groups, item) => {
     const groupKey = item['id'];
 
@@ -133,7 +125,6 @@ export async function processAnalysisResults(results, outputDir) {
     });
 
     // Read the frame file as a buffer first
-    const fileName = `frame_${maxSpeedFrameNumber.toString().padStart(6, '0')}.jpg`;
     // const framePath = path.join(outputDir, 'frames', fileName);
     // const frameBuffer = await fs.promises.readFile(framePath);
 
@@ -153,31 +144,27 @@ export async function processAnalysisResults(results, outputDir) {
       speed: maxSpeedEntry.speed_kmh,
       time: maxSpeedEntry.timestamp,
       // frame: maxSpeedCroppedFrame ? `\\annotated\\cropped\\frames\\${fileName}` : null,
-      frame: `\\annotated\\cropped\\frames\\${fileName}`,
+      frame: `${fileName}`,
     };
   });
 }
 
 export async function cropVehicleFromFrame(frameBuffer, bbox) {
-  return new Promise(async (resolve, reject) => {
     if (bbox?.length < 1) {
-      return resolve(null);
+      return null;
     }
 
-    try {
-      const img = await loadImage(frameBuffer);
-      const canvas = createCanvas(bbox[0][2], bbox[0][3]);
-      const ctx = canvas.getContext('2d');
+    const img = await loadImage(frameBuffer);
+    //const canvas = createCanvas(img.naturalWidth, img.naturalHeight);
+    const canvas = createCanvas(bbox[2], bbox[3]);
+    const ctx = canvas.getContext('2d');
 
-      bbox.forEach((croppedEl) => {
-        ctx.drawImage(img, croppedEl[0], croppedEl[1], croppedEl[2], croppedEl[3], 0, 0);
-      });
+   
+      ctx.drawImage(img, bbox[0], bbox[1], bbox[2], bbox[3], 0, 0, bbox[2], bbox[3]);
+      // ctx.drawImage(img, croppedEl[0], croppedEl[1], croppedEl[2], croppedEl[3], 0, 0, croppedEl[2], croppedEl[3]);
+    
 
-      const croppedBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
+    const croppedBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
 
-      resolve(croppedBuffer);
-    } catch (error) {
-      reject(error);
-    }
-  });
+    return croppedBuffer;
 }
